@@ -30,23 +30,29 @@ import (
 )
 
 var (
-	ifaceParam = flag.String("i", "", "Interface (e.g. eth0, wlan1, etc)")
-	helpParam  = flag.Bool("h", false, "Print help")
-	portParam  = flag.Int("p", 80, "Port to test against (default 80)")
-	/*
-		defaultHosts = map[string]string{
-			"Google": "google.com",
-			"Facebook": "facebook.com",
-			"Tokyo, JP": "speedtest.tokyo.linode.com",
-			"London, UK": "speedtest.london.linode.com",
-			"East Coast, USA": "speedtest.newark.linode.com",
-			"West Coast, USA": "speedtest.fremont.linode.com"
-		}
-	*/
+	ifaceParam   = flag.String("i", "", "Interface (e.g. eth0, wlan1, etc)")
+	helpParam    = flag.Bool("h", false, "Print help")
+	portParam    = flag.Int("p", 80, "Port to test against (default 80)")
+	autoParam    = flag.Bool("a", false, "Measure latency to several well known addresses")
+	defaultHosts = map[string]string{
+		// Busiest sites on the Internet, according to Wolfram Alpha
+		"Google":   "google.com",
+		"Facebook": "facebook.com",
+		"Baidu":    "baidu.com",
+
+		// Various locations, thanks Linode
+		"West Coast, USA": "speedtest.fremont.linode.com",
+		"East Coast, USA": "speedtest.newark.linode.com",
+		"London, UK":      "speedtest.london.linode.com",
+		"Tokyo, JP":       "speedtest.tokyo.linode.com",
+
+		// Other continents
+		"New Zealand":  "nzdsl.co.nz",
+		"South Africa": "speedtest.mybroadband.co.za",
+	}
 )
 
 func main() {
-	var err error
 	flag.Parse()
 
 	if *helpParam {
@@ -67,9 +73,11 @@ func main() {
 	localAddr := interfaceAddress(iface)
 	laddr := strings.Split(localAddr.String(), "/")[0] // Clean addresses like 192.168.1.30/24
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	var receiveTime time.Time
+	port := uint16(*portParam)
+	if *autoParam {
+		autoTest(laddr, port)
+		return
+	}
 
 	if len(flag.Args()) == 0 {
 		fmt.Println("Missing remote address")
@@ -77,29 +85,38 @@ func main() {
 		os.Exit(1)
 	}
 
+	remoteHost := flag.Arg(0)
+	fmt.Println("Measuring round-trip latency from", laddr, "to", remoteHost, "on port", port)
+	fmt.Printf("Latency: %v\n", latency(laddr, remoteHost, port))
+}
+
+func autoTest(localAddr string, port uint16) {
+	for name, host := range defaultHosts {
+		fmt.Printf("%15s: %v\n", name, latency(localAddr, host, port))
+	}
+}
+
+func latency(localAddr string, remoteHost string, port uint16) time.Duration {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	var receiveTime time.Time
+
+	addrs, err := net.LookupHost(remoteHost)
+	if err != nil {
+		log.Fatalf("Error resolving %s. %s\n", remoteHost, err)
+	}
+	remoteAddr := addrs[0]
+
 	go func() {
-		receiveTime = receiveSynAck(laddr)
+		receiveTime = receiveSynAck(localAddr)
 		wg.Done()
 	}()
 
-	port := uint16(*portParam)
-
-	addr := flag.Arg(0)
-
-	addrs, err := net.LookupHost(addr)
-	if err != nil {
-		log.Fatalf("LookupHost: %s. %s\n", addr, err)
-	}
-	addr = addrs[0]
-
-	fmt.Println("Measuring round-trip latency from", laddr, "to", addr, "on port", port)
-
 	time.Sleep(1 * time.Millisecond)
-	sendTime := sendSyn(laddr, addr, port)
+	sendTime := sendSyn(localAddr, remoteAddr, port)
 
 	wg.Wait()
-	latency := receiveTime.Sub(sendTime)
-	fmt.Printf("Latency: %v\n", latency)
+	return receiveTime.Sub(sendTime)
 }
 
 func chooseInterface() string {
@@ -142,9 +159,11 @@ func interfaceAddress(ifaceName string) net.Addr {
 
 func printHelp() {
 	help := `
-	USAGE: latency [-h] [-i iface] [-p port] <remote>
+	USAGE: latency [-h] [-a] [-i iface] [-p port] <remote>
 	Where 'remote' is an ip address or host name.
 	Default port is 80
+	-h: Help
+	-a: Run auto test against several well known sites
 	`
 	fmt.Println(help)
 }
