@@ -108,7 +108,7 @@ func latency(localAddr string, remoteHost string, port uint16) time.Duration {
 	remoteAddr := addrs[0]
 
 	go func() {
-		receiveTime = receiveSynAck(localAddr)
+		receiveTime = receiveSynAck(localAddr, remoteAddr)
 		wg.Done()
 	}()
 
@@ -221,10 +221,10 @@ func to4byte(addr string) [4]byte {
 	return [4]byte{byte(b0), byte(b1), byte(b2), byte(b3)}
 }
 
-func receiveSynAck(addr string) time.Time {
-	netaddr, err := net.ResolveIPAddr("ip4", addr)
+func receiveSynAck(localAddress, remoteAddress string) time.Time {
+	netaddr, err := net.ResolveIPAddr("ip4", localAddress)
 	if err != nil {
-		log.Fatalf("net.ResolveIPAddr: %s. %s\n", addr, netaddr)
+		log.Fatalf("net.ResolveIPAddr: %s. %s\n", localAddress, netaddr)
 	}
 
 	conn, err := net.ListenIP("ip4:tcp", netaddr)
@@ -234,9 +234,13 @@ func receiveSynAck(addr string) time.Time {
 	var receiveTime time.Time
 	for {
 		buf := make([]byte, 1024)
-		numRead, _, err := conn.ReadFrom(buf)
+		numRead, raddr, err := conn.ReadFrom(buf)
 		if err != nil {
 			log.Fatalf("ReadFrom: %s\n", err)
+		}
+		if raddr.String() != remoteAddress {
+			// this is not the packet we are looking for
+			continue
 		}
 		receiveTime = time.Now()
 		//fmt.Printf("Received: % x\n", buf[:numRead])
