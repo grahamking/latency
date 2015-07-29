@@ -179,7 +179,7 @@ func sendSyn(laddr, raddr string, port uint16) time.Time {
 		Reserved:    0,      // 3 bits
 		ECN:         0,      // 3 bits
 		Ctrl:        2,      // 6 bits (000010, SYN bit set)
-		Window:      0xaaaa, // 43690, dunno, copied it
+		Window:      0xaaaa, // The amount of data that it is able to accept in bytes
 		Checksum:    0,      // Kernel will set this if it's 0
 		Urgent:      0,
 		Options:     []TCPOption{},
