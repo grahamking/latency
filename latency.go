@@ -214,7 +214,10 @@ func sendSyn(laddr, raddr string, port uint16) time.Time {
 
 func to4byte(addr string) [4]byte {
 	parts := strings.Split(addr, ".")
-	b0, _ := strconv.Atoi(parts[0])
+	b0, err := strconv.Atoi(parts[0])
+	if err != nil {
+		log.Fatalf("to4byte: %s (latency works with IPv4 addresses only, but not IPv6!)\n", err)
+	}
 	b1, _ := strconv.Atoi(parts[1])
 	b2, _ := strconv.Atoi(parts[2])
 	b3, _ := strconv.Atoi(parts[3])
