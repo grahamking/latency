@@ -117,7 +117,7 @@ func (tcp *TCPHeader) Marshal() []byte {
 }
 
 // TCP Checksum
-func csum(data []byte, srcip, dstip [4]byte) uint16 {
+func Csum(data []byte, srcip, dstip [4]byte) uint16 {
 
 	pseudoHeader := []byte{
 		srcip[0], srcip[1], srcip[2], srcip[3],
